@@ -3553,8 +3553,11 @@ const seaBuildKnockoutBtn = document.getElementById("seaBuildKnockoutBtn");
 const seaSimulateAllBtn = document.getElementById("seaSimulateAllBtn");
 
 seaGenerateBtn.addEventListener("click", () => {
-  const groupATeams = SEA_GAMES_TEAMS.filter((t) => t.group === "A");
-  const groupBTeams = SEA_GAMES_TEAMS.filter((t) => t.group === "B");
+  // acak pembagian Group A/B tiap kali generate, biar seru — tetap 4 tim
+  // di Group A dan 5 tim di Group B (jumlahnya sama kayak format asli)
+  const shuffled = shuffleArray(SEA_GAMES_TEAMS);
+  const groupATeams = shuffled.slice(0, 4);
+  const groupBTeams = shuffled.slice(4, 9);
 
   seaState = {
     groupA: { teams: groupATeams, schedule: generateSeaGroupSchedule(groupATeams) },
