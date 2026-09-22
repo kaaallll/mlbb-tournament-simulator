@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MLBB Tournament Simulator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============ NAVBAR ============ -->
+  <header class="navbar">
+    <div class="navbar__brand">
+      <span class="navbar__brand-slash"></span>
+      <div class="navbar__brand-text">
+        <span class="navbar__brand-line1">MLBB</span>
+        <span class="navbar__brand-line2">Tournament Simulator</span>
+      </div>
+    </div>
+
+    <div class="navbar__selectors">
+      <div class="selector">
+        <label for="leagueSelect">League</label>
+        <select id="leagueSelect"></select>
+      </div>
+      <div class="selector">
+        <label for="seasonInput">Season</label>
+        <div class="selector__season-input">
+          <span>S</span>
+          <input type="number" id="seasonInput" min="1" placeholder="17" />
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ TABS ============ -->
+  <nav class="tabs">
+    <button class="tab tab--active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="teams">Teams</button>
+    <button class="tab" data-tab="standings">Standings</button>
+    <button class="tab" data-tab="knockout">Knockout</button>
+    <button class="tab" data-tab="international">International</button>
+    <button class="tab" data-tab="mseries">M-Series</button>
+    <button class="tab" data-tab="news">📰 News</button>
+    <button class="tab" data-tab="msc">MSC</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- ============ OVERVIEW ============ -->
+    <section id="overview" class="panel panel--active">
+      <div class="hero">
+        <div class="hero__panel">
+          <h1 class="hero__title">Bangun turnamenmu sendiri.</h1>
+          <p class="hero__subtitle">
+            Pilih league, atur kekuatan tim, dan simulasikan jalannya turnamen
+            dari group stage sampai grand final.
+          </p>
+        </div>
+        <div class="hero__stat-strip" id="overviewStats">
+          <!-- diisi via JS: jumlah tim, match selesai, champion -->
+        </div>
+      </div>
+
+      <div class="quick-sim">
+        <h3>Quick Match Simulator</h3>
+        <p class="quick-sim__hint">Coba simulation engine-nya dulu sebelum masuk ke knockout.</p>
+
+        <div class="quick-sim__controls">
+          <select id="quickTeamA"></select>
+          <span class="quick-sim__vs">VS</span>
+          <select id="quickTeamB"></select>
+
+          <select id="quickFormat">
+            <option value="3">BO3</option>
+            <option value="5">BO5</option>
+            <option value="7">BO7</option>
+          </select>
+
+          <button class="btn btn--primary" id="quickSimulateBtn">🎲 Simulate</button>
+        </div>
+
+        <div class="quick-sim__result" id="quickSimResult"></div>
+      </div>
+    </section>
+
+    <!-- ============ TEAMS ============ -->
+    <section id="teams" class="panel">
+      <div class="panel__header">
+        <h2>Teams</h2>
+        <button class="btn btn--ghost" id="openCustomTeamBtn">+ Custom Team</button>
+      </div>
+      <div class="team-grid" id="teamGrid">
+        <!-- diisi via JS -->
+      </div>
+
+      <!-- form custom team, tersembunyi default -->
+      <div class="custom-team-form" id="customTeamForm" hidden>
+        <h3>Create Custom Team</h3>
+        <label>Team Name
+          <input type="text" id="customTeamName" placeholder="cth: Alpha Esports" />
+        </label>
+        <label>Short Name
+          <input type="text" id="customTeamShort" placeholder="cth: ALP" maxlength="5" />
+        </label>
+        <label>Logo
+          <input type="file" id="customTeamLogo" accept="image/*" />
+        </label>
+        <label>Strength
+          <input type="range" id="customTeamStrength" min="1" max="100" value="70" />
+          <span id="customTeamStrengthValue">70</span>
+        </label>
+        <div class="custom-team-form__actions">
+          <button class="btn btn--primary" id="createCustomTeamBtn">Create Team</button>
+          <button class="btn btn--ghost" id="cancelCustomTeamBtn">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ STANDINGS ============ -->
+    <section id="standings" class="panel">
+      <div class="panel__header">
+        <h2>Standings</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--ghost" id="resetResultsBtn">🗑️ Reset All Results</button>
+          <button class="btn btn--primary" id="simulateScheduleBtn">🎲 Simulate All Matches</button>
+        </div>
+      </div>
+      <table class="standings-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th class="standings-table__accent">Match Point</th>
+            <th>Match W-L</th>
+            <th class="standings-table__accent">Net Game Win</th>
+            <th>Game W-L</th>
+          </tr>
+        </thead>
+        <tbody id="standingsBody">
+          <!-- diisi via JS -->
+        </tbody>
+      </table>
+
+      <h3 class="schedule-title">Regular Season Schedule</h3>
+      <div class="schedule-list" id="scheduleList">
+        <!-- diisi via JS -->
+      </div>
+    </section>
+
+    <!-- ============ KNOCKOUT ============ -->
+    <section id="knockout" class="panel">
+      <div class="panel__header">
+        <h2>Knockout Stage</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--ghost" id="generateBracketBtn">🔄 Generate Bracket from Standings</button>
+          <button class="btn btn--primary" id="simulateAllBtn">🎲 Simulate All</button>
+        </div>
+      </div>
+
+      <p class="knockout-hint">Top 6 tim dari Standings otomatis lolos ke Knockout — berapapun total tim di league.</p>
+      <div class="bracket">
+        <div class="bracket__column">
+          <h3 class="bracket__label">Upper Bracket</h3>
+          <div class="bracket__matches" id="upperBracket"></div>
+        </div>
+        <div class="bracket__column">
+          <h3 class="bracket__label">Lower Bracket</h3>
+          <div class="bracket__matches" id="lowerBracket"></div>
+        </div>
+        <div class="bracket__column">
+          <h3 class="bracket__label">Grand Final</h3>
+          <div class="bracket__matches" id="grandFinal"></div>
+        </div>
+      </div>
+
+      <div class="champion-banner" id="championBanner" hidden>
+        <span class="champion-banner__label">🏆 Champion</span>
+        <img class="champion-banner__logo" id="championLogo" src="" alt="" />
+        <span class="champion-banner__name" id="championName"></span>
+      </div>
+    </section>
+
+    <!-- ============ INTERNATIONAL ============ -->
+    <section id="international" class="panel">
+      <div class="panel__header">
+        <h2>International Qualification</h2>
+      </div>
+      <div class="intl-target" id="intlTarget">
+        <!-- diisi via JS: "S18 → M-SERIES" dsb -->
+      </div>
+      <div class="intl-list" id="intlList">
+        <!-- diisi via JS: daftar tim/league yang qualified -->
+      </div>
+    </section>
+
+    <!-- ============ M-SERIES (World Championship) ============ -->
+    <section id="mseries" class="panel">
+      <div class="panel__header">
+        <h2>M-Series World Championship</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--ghost" id="mseriesResetBtn">🗑️ Reset M-Series</button>
+          <button class="btn btn--primary" id="mseriesGenerateBtn">🔄 Generate M-Series (16 Teams)</button>
+        </div>
+      </div>
+      <p class="knockout-hint">
+        2 tim teratas (Champion + Runner-up) dari Knockout tiap 8 MPL otomatis lolos ke sini.
+        Selesaikan Grand Final tiap league dulu di tab Knockout.
+      </p>
+
+      <h3 class="mseries-section-title">Qualification Overview</h3>
+      <div class="mseries-qualification-grid" id="mseriesQualificationGrid">
+        <!-- diisi via JS -->
+      </div>
+
+      <div id="mseriesSwissSection" hidden>
+        <h3 class="mseries-section-title">Swiss Stage</h3>
+        <div class="mseries-swiss-standings" id="mseriesSwissStandings">
+          <!-- diisi via JS -->
+        </div>
+        <div id="mseriesSwissRounds">
+          <!-- diisi via JS -->
+        </div>
+      </div>
+
+      <div id="mseriesKnockoutSection" hidden>
+        <h3 class="mseries-section-title">Knockout Stage</h3>
+        <div class="panel__header-actions" style="margin-bottom:16px;">
+          <button class="btn btn--primary" id="mseriesSimulateAllBtn">🎲 Simulate All</button>
+        </div>
+        <div class="bracket bracket--mseries">
+          <div class="bracket__column" id="mseriesUpperBracket"></div>
+          <div class="bracket__column" id="mseriesLowerBracket"></div>
+          <div class="bracket__column" id="mseriesGrandFinal"></div>
+        </div>
+        <div class="champion-banner" id="mseriesChampionBanner" hidden>
+          <span class="champion-banner__label">🏆 M-Series World Champion</span>
+          <img class="champion-banner__logo" id="mseriesChampionLogo" src="" alt="" />
+          <span class="champion-banner__name" id="mseriesChampionName"></span>
+        </div>
+      </div>
+
+      <h3 class="mseries-section-title">M-Series News</h3>
+      <div class="news-timeline" id="mseriesNewsTimeline">
+        <!-- diisi via JS -->
+      </div>
+    </section>
+
+    <!-- ============ NEWS CENTER ============ -->
+    <section id="news" class="panel">
+      <div class="panel__header">
+        <h2>📰 News Center</h2>
+      </div>
+      <p class="knockout-hint">
+        Berita dibuat otomatis dari hasil pertandingan league & season yang lagi aktif. Terbaru di paling atas.
+      </p>
+      <div class="news-timeline" id="newsTimeline">
+        <!-- diisi via JS -->
+      </div>
+    </section>
+
+    <!-- ============ MSC (Mid-Season Cup) ============ -->
+    <section id="msc" class="panel">
+      <div class="panel__header">
+        <h2>MSC — Mid-Season Cup</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--ghost" id="mscResetBtn">🗑️ Reset MSC</button>
+          <button class="btn btn--primary" id="mscGenerateBtn">🔄 Generate MSC (16 Teams)</button>
+        </div>
+      </div>
+      <p class="knockout-hint">
+        2 tim teratas dari Knockout tiap 8 MPL dibagi jadi 2 Group (A & B), 8 tim per grup.
+        Selesaikan Grand Final tiap league dulu di tab Knockout.
+      </p>
+
+      <h3 class="mseries-section-title">Qualification Overview</h3>
+      <div class="mseries-qualification-grid" id="mscQualificationGrid">
+        <!-- diisi via JS -->
+      </div>
+
+      <div id="mscGroupSection" hidden>
+        <h3 class="mseries-section-title">Group Stage</h3>
+        <div class="msc-groups">
+          <div class="msc-group">
+            <h4 class="msc-group__title">Group A</h4>
+            <div class="bracket__matches" id="mscGroupAMatches"></div>
+          </div>
+          <div class="msc-group">
+            <h4 class="msc-group__title">Group B</h4>
+            <div class="bracket__matches" id="mscGroupBMatches"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="mscKnockoutSection" hidden>
+        <h3 class="mseries-section-title">Knockout Stage</h3>
+        <div class="panel__header-actions" style="margin-bottom:16px;">
+          <button class="btn btn--primary" id="mscSimulateAllBtn">🎲 Simulate All</button>
+        </div>
+        <div class="round-group__matches" id="mscQuarterfinals"></div>
+        <div class="round-group__matches" id="mscSemifinals" style="margin-top:16px;"></div>
+        <div class="round-group__matches" id="mscThirdPlace" style="margin-top:16px;"></div>
+        <div class="round-group__matches" id="mscGrandFinalMatch" style="margin-top:16px;"></div>
+        <div class="champion-banner" id="mscChampionBanner" hidden>
+          <span class="champion-banner__label">🏆 MSC Champion</span>
+          <img class="champion-banner__logo" id="mscChampionLogo" src="" alt="" />
+          <span class="champion-banner__name" id="mscChampionName"></span>
+        </div>
+      </div>
+
+      <h3 class="mseries-section-title">MSC News</h3>
+      <div class="news-timeline" id="mscNewsTimeline">
+        <!-- diisi via JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ ROSTER MODAL (Player / Roster Management) ============ -->
+  <div class="roster-modal-overlay" id="rosterModalOverlay" hidden>
+    <div class="roster-modal">
+      <div class="roster-modal__header">
+        <img class="roster-modal__logo" id="rosterModalLogo" src="" alt="" />
+        <h3 id="rosterModalTeamName">Team Name</h3>
+        <button class="roster-modal__close" id="rosterModalClose" title="Tutup">✕</button>
+      </div>
+
+      <div class="roster-modal__power">
+        <span class="roster-modal__power-label">Team Power Mode:</span>
+        <button class="roster-mode-btn" id="rosterModeManualBtn">MANUAL</button>
+        <button class="roster-mode-btn" id="rosterModeAutoBtn">AUTO</button>
+        <span class="roster-modal__power-value" id="rosterModalPowerValue"></span>
+      </div>
+
+      <div class="roster-list" id="rosterList">
+        <!-- diisi via JS -->
+      </div>
+
+      <div class="roster-modal__actions">
+        <button class="btn btn--ghost" id="rosterRandomizeBtn">🎲 Randomize Roster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ NEWS DETAIL MODAL ============ -->
+  <div class="roster-modal-overlay" id="newsModalOverlay" hidden>
+    <div class="roster-modal news-modal">
+      <div class="roster-modal__header">
+        <h3 id="newsModalCategory">📰 Match Result</h3>
+        <button class="roster-modal__close" id="newsModalClose" title="Tutup">✕</button>
+      </div>
+      <h2 class="news-modal__headline" id="newsModalHeadline"></h2>
+      <div class="news-modal__meta" id="newsModalMeta"></div>
+      <p class="news-modal__body" id="newsModalBody"></p>
+      <div class="roster-modal__actions">
+        <button class="btn btn--primary" id="newsModalOpenInterviewBtn">🎤 Post-Match Interview</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ POST-MATCH INTERVIEW MODAL ============ -->
+  <div class="roster-modal-overlay" id="interviewModalOverlay" hidden>
+    <div class="roster-modal interview-modal">
+      <div class="roster-modal__header">
+        <h3>🎤 Post-Match Interview</h3>
+        <button class="roster-modal__close" id="interviewModalClose" title="Tutup">✕</button>
+      </div>
+      <div class="interview-modal__empty" id="interviewModalEmpty" hidden>
+        Tim ini belum punya roster, jadi belum ada yang bisa diwawancarai. Isi dulu roster-nya lewat Manage Roster.
+      </div>
+      <div id="interviewModalContent" hidden>
+        <div class="interview-modal__player">
+          <span class="interview-modal__player-name" id="interviewModalPlayerName"></span>
+          <span class="interview-modal__player-role" id="interviewModalPlayerRole"></span>
+        </div>
+        <p class="interview-modal__question" id="interviewModalQuestion"></p>
+        <p class="interview-modal__answer" id="interviewModalAnswer"></p>
+        <div class="roster-modal__actions">
+          <button class="btn btn--ghost" id="interviewModalNextBtn">Next Question →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
