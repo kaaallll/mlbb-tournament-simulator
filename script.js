@@ -2723,6 +2723,35 @@ function simulateMseriesMatch(matchId) {
   renderMseriesAll();
 }
 
+function submitMseriesManualScore(matchId, scoreA, scoreB) {
+  const kb = mseriesState.knockout;
+  if (!kb) return;
+  const match = kb.matches[matchId];
+  if (!match || match.played || !match.teamA || !match.teamB) return;
+
+  if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
+    alert("Skor tidak valid. Masukkan dua angka berbeda (misal 2 - 0).");
+    return;
+  }
+
+  const winner = scoreA > scoreB ? match.teamA : match.teamB;
+  const loser = winner === match.teamA ? match.teamB : match.teamA;
+
+  match.played = true;
+  match.winnerId = winner.id;
+  match.scoreA = scoreA;
+  match.scoreB = scoreB;
+
+  if (match.winTo) kb.matches[match.winTo.match]["team" + match.winTo.slot] = winner;
+  if (match.loseTo) kb.matches[match.loseTo.match]["team" + match.loseTo.slot] = loser;
+  if (matchId === "m14") kb.champion = winner;
+
+  recordMseriesMatchNews("mseries-ko:" + matchId, match.teamA, match.teamB, scoreA, scoreB, winner, match.bestOf, matchId === "m14");
+
+  saveMseriesState();
+  renderMseriesAll();
+}
+
 // ---- Rendering ----
 function mseriesMatchCardHtml(match) {
   const teamA = match.teamA;
@@ -2750,7 +2779,14 @@ function mseriesMatchCardHtml(match) {
   } else if (!teamA || !teamB) {
     actionHtml = `<div class="match-card__winner-tag" style="color:var(--text-dim)">Menunggu tim...</div>`;
   } else {
-    actionHtml = `<button class="btn btn--ghost match-card__simulate" data-mseries-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>`;
+    actionHtml = `
+      <button class="btn btn--ghost match-card__simulate" data-mseries-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>
+      <div class="manual-score-row">
+        <input type="number" min="0" class="manual-score-input" data-mseries-manual-a="${match.id}" placeholder="0" />
+        <span>-</span>
+        <input type="number" min="0" class="manual-score-input" data-mseries-manual-b="${match.id}" placeholder="0" />
+        <button class="btn btn--ghost manual-score-submit" data-mseries-manual-submit="${match.id}">✓ Input Skor</button>
+      </div>`;
   }
 
   return `
@@ -2798,6 +2834,15 @@ function renderMseriesKnockout() {
 
   document.querySelectorAll("[data-mseries-sim]").forEach((btn) => {
     btn.addEventListener("click", () => simulateMseriesMatch(btn.dataset.mseriesSim));
+  });
+
+  document.querySelectorAll("[data-mseries-manual-submit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const matchId = btn.dataset.mseriesManualSubmit;
+      const inputA = document.querySelector(`[data-mseries-manual-a="${matchId}"]`);
+      const inputB = document.querySelector(`[data-mseries-manual-b="${matchId}"]`);
+      submitMseriesManualScore(matchId, Number(inputA.value), Number(inputB.value));
+    });
   });
 
   wireMseriesNewsActions(mseriesUpperBracketEl);
@@ -3223,6 +3268,35 @@ function simulateMscKnockoutMatch(matchId) {
   renderMscAll();
 }
 
+function submitMscKnockoutManualScore(matchId, scoreA, scoreB) {
+  const kb = mscState.knockout;
+  if (!kb) return;
+  const match = kb.matches[matchId];
+  if (!match || match.played || !match.teamA || !match.teamB) return;
+
+  if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
+    alert("Skor tidak valid. Masukkan dua angka berbeda (misal 2 - 0).");
+    return;
+  }
+
+  const winner = scoreA > scoreB ? match.teamA : match.teamB;
+  const loser = winner === match.teamA ? match.teamB : match.teamA;
+
+  match.played = true;
+  match.winnerId = winner.id;
+  match.scoreA = scoreA;
+  match.scoreB = scoreB;
+
+  if (match.winTo) kb.matches[match.winTo.match]["team" + match.winTo.slot] = winner;
+  if (match.loseTo) kb.matches[match.loseTo.match]["team" + match.loseTo.slot] = loser;
+  if (matchId === "gf") kb.champion = winner;
+
+  recordMscMatchNews("msc-ko:" + matchId, match.teamA, match.teamB, scoreA, scoreB, winner, match.bestOf, matchId === "gf");
+
+  saveMscState();
+  renderMscAll();
+}
+
 // ---- News ----
 function recordMscMatchNews(matchKey, teamA, teamB, scoreA, scoreB, winner, bestOf, isGrandFinal) {
   if (!mscState.news) mscState.news = [];
@@ -3299,7 +3373,14 @@ function mscMatchCardHtml(match, kind, groupKey) {
         <button class="btn btn--ghost manual-score-submit" data-msc-group-submit="${groupKey}:${match.id}">✓ Input Skor</button>
       </div>`;
   } else {
-    actionHtml = `<button class="btn btn--ghost match-card__simulate" data-msc-ko-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>`;
+    actionHtml = `
+      <button class="btn btn--ghost match-card__simulate" data-msc-ko-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>
+      <div class="manual-score-row">
+        <input type="number" min="0" class="manual-score-input" data-msc-ko-a="${match.id}" placeholder="0" />
+        <span>-</span>
+        <input type="number" min="0" class="manual-score-input" data-msc-ko-b="${match.id}" placeholder="0" />
+        <button class="btn btn--ghost manual-score-submit" data-msc-ko-submit="${match.id}">✓ Input Skor</button>
+      </div>`;
   }
 
   return `
@@ -3353,6 +3434,15 @@ function renderMscKnockout() {
 
   document.querySelectorAll("[data-msc-ko-sim]").forEach((btn) => {
     btn.addEventListener("click", () => simulateMscKnockoutMatch(btn.dataset.mscKoSim));
+  });
+
+  document.querySelectorAll("[data-msc-ko-submit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const matchId = btn.dataset.mscKoSubmit;
+      const inputA = document.querySelector(`[data-msc-ko-a="${matchId}"]`);
+      const inputB = document.querySelector(`[data-msc-ko-b="${matchId}"]`);
+      submitMscKnockoutManualScore(matchId, Number(inputA.value), Number(inputB.value));
+    });
   });
 
   wireMscNewsActions(mscQuarterfinalsEl);
@@ -3675,6 +3765,35 @@ function simulateSeaKnockoutMatch(matchId) {
   renderSeaAll();
 }
 
+function submitSeaKnockoutManualScore(matchId, scoreA, scoreB) {
+  const kb = seaState.knockout;
+  if (!kb) return;
+  const match = kb.matches[matchId];
+  if (!match || match.played || !match.teamA || !match.teamB) return;
+
+  if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
+    alert("Skor tidak valid. Masukkan dua angka berbeda (misal 2 - 0).");
+    return;
+  }
+
+  const winner = scoreA > scoreB ? match.teamA : match.teamB;
+  const loser = winner === match.teamA ? match.teamB : match.teamA;
+
+  match.played = true;
+  match.winnerId = winner.id;
+  match.scoreA = scoreA;
+  match.scoreB = scoreB;
+
+  if (match.winTo) kb.matches[match.winTo.match]["team" + match.winTo.slot] = winner;
+  if (match.loseTo) kb.matches[match.loseTo.match]["team" + match.loseTo.slot] = loser;
+  if (matchId === "gf") kb.champion = winner;
+
+  recordSeaMatchNews("sea-ko:" + matchId, match.teamA, match.teamB, scoreA, scoreB, winner, match.bestOf, matchId === "gf");
+
+  saveSeaState();
+  renderSeaAll();
+}
+
 seaSimulateAllBtn.addEventListener("click", () => {
   if (!seaState || !seaState.knockout) return;
   seaState.knockout.order.forEach((id) => simulateSeaKnockoutMatch(id));
@@ -3813,7 +3932,14 @@ function seaMatchCardHtml(match) {
   } else if (!teamA || !teamB) {
     actionHtml = `<div class="match-card__winner-tag" style="color:var(--text-dim)">Menunggu tim...</div>`;
   } else {
-    actionHtml = `<button class="btn btn--ghost match-card__simulate" data-sea-ko-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>`;
+    actionHtml = `
+      <button class="btn btn--ghost match-card__simulate" data-sea-ko-sim="${match.id}">🎲 Random (BO${match.bestOf})</button>
+      <div class="manual-score-row">
+        <input type="number" min="0" class="manual-score-input" data-sea-ko-a="${match.id}" placeholder="0" />
+        <span>-</span>
+        <input type="number" min="0" class="manual-score-input" data-sea-ko-b="${match.id}" placeholder="0" />
+        <button class="btn btn--ghost manual-score-submit" data-sea-ko-submit="${match.id}">✓ Input Skor</button>
+      </div>`;
   }
 
   return `
@@ -3854,6 +3980,15 @@ function renderSeaKnockout() {
 
   document.querySelectorAll("[data-sea-ko-sim]").forEach((btn) => {
     btn.addEventListener("click", () => simulateSeaKnockoutMatch(btn.dataset.seaKoSim));
+  });
+
+  document.querySelectorAll("[data-sea-ko-submit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const matchId = btn.dataset.seaKoSubmit;
+      const inputA = document.querySelector(`[data-sea-ko-a="${matchId}"]`);
+      const inputB = document.querySelector(`[data-sea-ko-b="${matchId}"]`);
+      submitSeaKnockoutManualScore(matchId, Number(inputA.value), Number(inputB.value));
+    });
   });
 
   wireSeaNewsActions(seaPlayinsEl);
