@@ -1334,6 +1334,356 @@ function wireMatchNewsActions(container) {
 }
 
 // ----------------------------------------------------------
+// STAFF (Head Coach & Assistant Coach)
+// Disimpan di localStorage per team id, sama polanya kayak Roster.
+// Tidak ada data default untuk tim resmi (biar gak ngarang nama
+// pelatih beneran) — semua mulai kosong, diisi manual atau Randomize.
+// ----------------------------------------------------------
+function staffKey(teamId) {
+  return `mlbb-sim:staff:${teamId}`;
+}
+
+function loadStaff(teamId) {
+  try {
+    const raw = localStorage.getItem(staffKey(teamId));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // data rusak — anggap kosong
+  }
+  return { headCoach: null, assistantCoach: null };
+}
+
+function saveStaff(teamId, staff) {
+  try {
+    localStorage.setItem(staffKey(teamId), JSON.stringify(staff));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+function deleteStaffData(teamId) {
+  localStorage.removeItem(staffKey(teamId));
+}
+
+const COACH_NAME_POOL = ["Yeb", "Adi", "Raka", "Dimas", "Budi", "Fajar", "Agus", "Rian", "Doni", "Eka", "Farel", "Galih", "Hendra", "Iqbal", "Joko", "Nanda"];
+function generateRandomCoachName(exclude) {
+  const pool = COACH_NAME_POOL.filter((n) => "Coach " + n !== exclude);
+  return "Coach " + pickRandomFrom(pool);
+}
+
+const staffModalOverlay = document.getElementById("staffModalOverlay");
+const staffModalLogo = document.getElementById("staffModalLogo");
+const staffModalTeamName = document.getElementById("staffModalTeamName");
+const staffList = document.getElementById("staffList");
+const staffRandomizeBtn = document.getElementById("staffRandomizeBtn");
+
+let staffModalTeamId = null;
+let staffModalEditingRole = null; // "headCoach" | "assistantCoach"
+
+function openStaffModal(teamId) {
+  const team = state.teams.find((t) => t.id === teamId);
+  if (!team) return;
+  staffModalTeamId = teamId;
+  staffModalEditingRole = null;
+  staffModalLogo.src = team.logo;
+  staffModalLogo.alt = team.name + " logo";
+  staffModalTeamName.textContent = team.name;
+  staffModalOverlay.hidden = false;
+  renderStaffModal();
+}
+
+document.getElementById("staffModalClose").addEventListener("click", () => {
+  staffModalOverlay.hidden = true;
+});
+staffModalOverlay.addEventListener("click", (e) => {
+  if (e.target === staffModalOverlay) staffModalOverlay.hidden = true;
+});
+
+function renderStaffModal() {
+  const team = state.teams.find((t) => t.id === staffModalTeamId);
+  if (!team) return;
+  const staff = loadStaff(team.id);
+
+  const roles = [
+    { key: "headCoach", label: "Head Coach", icon: "👨‍💼" },
+    { key: "assistantCoach", label: "Assistant Coach", icon: "🧑‍💼" },
+  ];
+
+  staffList.innerHTML = roles
+    .map(({ key, label, icon }) => {
+      const person = staff[key];
+
+      if (staffModalEditingRole === key) {
+        return `
+          <div class="roster-player roster-player--editing">
+            <div class="roster-player__role">${icon} ${label}</div>
+            <label style="grid-column:1/-1;">Nama
+              <input type="text" class="roster-player__input" id="staffEditName" value="${person ? person.name : ""}" placeholder="Nama ${label}" />
+            </label>
+            <div class="roster-player__editing-actions">
+              <button class="btn btn--primary" id="staffSaveBtn">SAVE</button>
+              <button class="btn btn--ghost" id="staffCancelEditBtn">Batal</button>
+            </div>
+          </div>`;
+      }
+
+      if (!person) {
+        return `
+          <div class="roster-player roster-player--empty">
+            <div class="roster-player__role">${icon} ${label}</div>
+            <div class="roster-player__empty-label">Belum ada</div>
+            <button class="btn btn--ghost roster-player__edit-btn" data-add-staff="${key}">+ ADD</button>
+          </div>`;
+      }
+
+      return `
+        <div class="roster-player">
+          <div class="roster-player__role">${icon} ${label}</div>
+          <div class="roster-player__info">
+            <span class="roster-player__name">${person.name}</span>
+          </div>
+          <button class="btn btn--ghost roster-player__edit-btn" data-edit-staff="${key}">EDIT</button>
+        </div>`;
+    })
+    .join("");
+
+  staffList.querySelectorAll("[data-edit-staff], [data-add-staff]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      staffModalEditingRole = btn.dataset.editStaff || btn.dataset.addStaff;
+      renderStaffModal();
+    });
+  });
+
+  const saveBtn = document.getElementById("staffSaveBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      const nameInput = document.getElementById("staffEditName");
+      const name = nameInput.value.trim();
+      if (!name) {
+        alert("Nama wajib diisi.");
+        return;
+      }
+      const updatedStaff = loadStaff(team.id);
+      updatedStaff[staffModalEditingRole] = { name, role: staffModalEditingRole === "headCoach" ? "Head Coach" : "Assistant Coach" };
+      saveStaff(team.id, updatedStaff);
+      staffModalEditingRole = null;
+      renderStaffModal();
+    });
+  }
+
+  const cancelBtn = document.getElementById("staffCancelEditBtn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      staffModalEditingRole = null;
+      renderStaffModal();
+    });
+  }
+}
+
+staffRandomizeBtn.addEventListener("click", () => {
+  if (!staffModalTeamId) return;
+  const headName = generateRandomCoachName();
+  const assistantName = generateRandomCoachName(headName);
+  saveStaff(staffModalTeamId, {
+    headCoach: { name: headName, role: "Head Coach" },
+    assistantCoach: { name: assistantName, role: "Assistant Coach" },
+  });
+  staffModalEditingRole = null;
+  renderStaffModal();
+});
+
+// ----------------------------------------------------------
+// SPONSOR SYSTEM
+// Disimpan di localStorage per team id. Sponsor custom boleh upload
+// logo sendiri (Data URL); kalau gak ada logo, cukup tampilkan nama.
+// ----------------------------------------------------------
+const SPONSOR_CATEGORIES = ["Main Sponsor", "Title Sponsor", "Official Sponsor", "Official Partner"];
+
+function sponsorsKey(teamId) {
+  return `mlbb-sim:sponsors:${teamId}`;
+}
+
+function loadSponsors(teamId) {
+  try {
+    const raw = localStorage.getItem(sponsorsKey(teamId));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // data rusak — anggap kosong
+  }
+  return [];
+}
+
+function saveSponsors(teamId, list) {
+  try {
+    localStorage.setItem(sponsorsKey(teamId), JSON.stringify(list));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+function deleteSponsorsData(teamId) {
+  localStorage.removeItem(sponsorsKey(teamId));
+}
+
+const sponsorModalOverlay = document.getElementById("sponsorModalOverlay");
+const sponsorModalLogo = document.getElementById("sponsorModalLogo");
+const sponsorModalTeamName = document.getElementById("sponsorModalTeamName");
+const sponsorList = document.getElementById("sponsorList");
+const sponsorAddBtn = document.getElementById("sponsorAddBtn");
+
+let sponsorModalTeamId = null;
+let sponsorModalEditingId = null; // id sponsor yang lagi diedit, atau "new" buat form tambah baru
+
+function openSponsorModal(teamId) {
+  const team = state.teams.find((t) => t.id === teamId);
+  if (!team) return;
+  sponsorModalTeamId = teamId;
+  sponsorModalEditingId = null;
+  sponsorModalLogo.src = team.logo;
+  sponsorModalLogo.alt = team.name + " logo";
+  sponsorModalTeamName.textContent = team.name;
+  sponsorModalOverlay.hidden = false;
+  renderSponsorModal();
+}
+
+document.getElementById("sponsorModalClose").addEventListener("click", () => {
+  sponsorModalOverlay.hidden = true;
+});
+sponsorModalOverlay.addEventListener("click", (e) => {
+  if (e.target === sponsorModalOverlay) sponsorModalOverlay.hidden = true;
+});
+
+function sponsorFormHtml(sponsor) {
+  return `
+    <div class="sponsor-form">
+      <label>Sponsor Name
+        <input type="text" id="sponsorEditName" value="${sponsor ? sponsor.name : ""}" placeholder="Nama sponsor" />
+      </label>
+      <label>Category
+        <select id="sponsorEditCategory">
+          ${SPONSOR_CATEGORIES.map((c) => `<option value="${c}" ${sponsor && sponsor.category === c ? "selected" : ""}>${c}</option>`).join("")}
+        </select>
+      </label>
+      <label>Logo (opsional)
+        <input type="file" id="sponsorEditLogo" accept="image/*" />
+      </label>
+      <div class="sponsor-form__actions">
+        <button class="btn btn--primary" id="sponsorSaveBtn">SAVE</button>
+        <button class="btn btn--ghost" id="sponsorCancelBtn">Batal</button>
+      </div>
+    </div>`;
+}
+
+function renderSponsorModal() {
+  const team = state.teams.find((t) => t.id === sponsorModalTeamId);
+  if (!team) return;
+  const sponsors = loadSponsors(team.id);
+
+  const rowsHtml = sponsors
+    .map((sponsor) => {
+      if (sponsorModalEditingId === sponsor.id) {
+        return sponsorFormHtml(sponsor);
+      }
+      const logoHtml = sponsor.logo
+        ? `<img class="sponsor-row__logo" src="${sponsor.logo}" alt="${sponsor.name} logo" />`
+        : `<div class="sponsor-row__logo sponsor-row__logo--empty">🤝</div>`;
+      return `
+        <div class="sponsor-row">
+          ${logoHtml}
+          <div class="sponsor-row__info">
+            <span class="sponsor-row__name">${sponsor.name}</span>
+            <span class="sponsor-row__category">${sponsor.category}</span>
+          </div>
+          <div class="sponsor-row__actions">
+            <button data-edit-sponsor="${sponsor.id}">EDIT</button>
+            <button class="sponsor-row__delete" data-delete-sponsor="${sponsor.id}">DELETE</button>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  const newFormHtml = sponsorModalEditingId === "new" ? sponsorFormHtml(null) : "";
+
+  sponsorList.innerHTML =
+    rowsHtml + newFormHtml || `<p style="color:var(--text-dim); font-size:13px;">Belum ada sponsor.</p>`;
+
+  sponsorAddBtn.hidden = sponsorModalEditingId !== null;
+
+  sponsorList.querySelectorAll("[data-edit-sponsor]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      sponsorModalEditingId = btn.dataset.editSponsor;
+      renderSponsorModal();
+    });
+  });
+
+  sponsorList.querySelectorAll("[data-delete-sponsor]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const confirmed = confirm("Hapus sponsor ini?");
+      if (!confirmed) return;
+      const updated = loadSponsors(team.id).filter((s) => s.id !== btn.dataset.deleteSponsor);
+      saveSponsors(team.id, updated);
+      renderSponsorModal();
+    });
+  });
+
+  const saveBtn = document.getElementById("sponsorSaveBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      const nameInput = document.getElementById("sponsorEditName");
+      const categorySelect = document.getElementById("sponsorEditCategory");
+      const logoInput = document.getElementById("sponsorEditLogo");
+      const name = nameInput.value.trim();
+      const category = categorySelect.value;
+
+      if (!name) {
+        alert("Nama sponsor wajib diisi.");
+        return;
+      }
+
+      const finalize = (logoDataUrl) => {
+        const list = loadSponsors(team.id);
+        if (sponsorModalEditingId === "new") {
+          list.push({ id: "sponsor-" + Date.now(), name, category, logo: logoDataUrl || null });
+        } else {
+          const idx = list.findIndex((s) => s.id === sponsorModalEditingId);
+          if (idx !== -1) {
+            list[idx].name = name;
+            list[idx].category = category;
+            if (logoDataUrl) list[idx].logo = logoDataUrl;
+          }
+        }
+        saveSponsors(team.id, list);
+        sponsorModalEditingId = null;
+        renderSponsorModal();
+      };
+
+      const file = logoInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => finalize(e.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        const existing = sponsorModalEditingId !== "new" ? loadSponsors(team.id).find((s) => s.id === sponsorModalEditingId) : null;
+        finalize(existing ? existing.logo : null);
+      }
+    });
+  }
+
+  const cancelBtn = document.getElementById("sponsorCancelBtn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      sponsorModalEditingId = null;
+      renderSponsorModal();
+    });
+  }
+}
+
+sponsorAddBtn.addEventListener("click", () => {
+  sponsorModalEditingId = "new";
+  renderSponsorModal();
+});
+
+// ----------------------------------------------------------
 // DROPDOWNS
 // ----------------------------------------------------------
 const leagueSelect = document.getElementById("leagueSelect");
@@ -1444,6 +1794,8 @@ function renderTeamGrid(isComingSoon) {
           ${isAuto ? '<span class="team-card__auto-badge">AUTO</span>' : ""}
         </div>
         <button class="team-card__roster-btn" data-manage-roster="${team.id}">MANAGE ROSTER</button>
+        <button class="team-card__roster-btn" data-manage-staff="${team.id}">MANAGE STAFF</button>
+        <button class="team-card__roster-btn" data-manage-sponsors="${team.id}">MANAGE SPONSORS</button>
       </div>`;
     })
     .join("");
@@ -1468,6 +1820,14 @@ function renderTeamGrid(isComingSoon) {
   teamGrid.querySelectorAll("[data-manage-roster]").forEach((btn) => {
     btn.addEventListener("click", () => openRosterModal(btn.dataset.manageRoster));
   });
+
+  // pasang listener tombol Manage Staff & Manage Sponsors
+  teamGrid.querySelectorAll("[data-manage-staff]").forEach((btn) => {
+    btn.addEventListener("click", () => openStaffModal(btn.dataset.manageStaff));
+  });
+  teamGrid.querySelectorAll("[data-manage-sponsors]").forEach((btn) => {
+    btn.addEventListener("click", () => openSponsorModal(btn.dataset.manageSponsors));
+  });
 }
 
 // Hapus tim dari kompetisi yang sedang berjalan.
@@ -1486,6 +1846,8 @@ function removeTeam(teamId) {
   const customs = loadCustomTeams().filter((t) => t.id !== teamId);
   saveCustomTeams(customs);
   deleteRosterData(teamId);
+  deleteStaffData(teamId);
+  deleteSponsorsData(teamId);
 
   state.schedule = state.teams.length >= 2 ? generateSchedule(state.teams) : [];
   state.knockout = null;

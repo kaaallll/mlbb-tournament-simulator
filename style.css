@@ -804,6 +804,109 @@ input:focus-visible {
   justify-content: center;
 }
 
+/* ============ SPONSOR ROW (dipakai di modal Manage Sponsors) ============ */
+.sponsor-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.sponsor-row__logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.sponsor-row__logo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-faint);
+}
+
+.sponsor-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sponsor-row__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sponsor-row__category {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.sponsor-row__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sponsor-row__actions button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: var(--radius);
+}
+
+.sponsor-row__actions button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.sponsor-row__actions button.sponsor-row__delete:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.sponsor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.sponsor-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sponsor-form input,
+.sponsor-form select {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  font-size: 13px;
+  font-family: var(--font-body);
+}
+
+.sponsor-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ============ CUSTOM TEAM FORM ============ */
 .custom-team-form {
   margin-top: 20px;
