@@ -995,6 +995,23 @@ const NEWS_TEMPLATES = {
       "{team} berhasil mengamankan tiket ke {event} setelah tampil impresif di {league} {season}. Ini menjadi kesempatan bagi {team} untuk unjuk gigi di panggung internasional.",
     ],
   },
+  academy: {
+    label: "🌱 Rookie News",
+    headlines: [
+      "🌱 {player} Resmi Dipromosikan ke Roster Utama {team}",
+      "🌱 Bintang Muda! {player} Naik dari Youth Academy {team}",
+    ],
+    bodies: [
+      "{player} resmi dipromosikan dari Youth Academy ke roster utama {team}. Semua mata kini tertuju pada penampilan perdananya di kompetisi utama.\n\nManajemen {team} berharap talenta muda ini bisa terus berkembang dan menjadi tulang punggung tim di masa depan.",
+    ],
+  },
+  seasonAwards: {
+    label: "🏆 Season Awards",
+    headlines: ["🏆 Season Awards {league} {season} Resmi Diumumkan"],
+    bodies: [
+      "{league} {season} resmi berakhir dan penghargaan musim telah diumumkan. Selamat kepada seluruh pemenang, dan sampai jumpa di season berikutnya!",
+    ],
+  },
 };
 
 const INTERVIEW_QUESTIONS = [
@@ -1766,6 +1783,7 @@ function loadTeamsForCurrentSelection() {
   renderKnockout();
   renderInternational();
   renderNewsTimeline();
+  renderSeasonSystems();
 }
 
 function renderTeamGrid(isComingSoon) {
@@ -1848,6 +1866,7 @@ function removeTeam(teamId) {
   deleteRosterData(teamId);
   deleteStaffData(teamId);
   deleteSponsorsData(teamId);
+  localStorage.removeItem(academyKey(teamId));
 
   state.schedule = state.teams.length >= 2 ? generateSchedule(state.teams) : [];
   state.knockout = null;
@@ -4411,6 +4430,577 @@ function renderSeaAll() {
   renderSeaKnockout();
   renderSeaNewsTimeline();
 }
+
+// ----------------------------------------------------------
+// YOUTH ACADEMY
+// Rookie disimpan per team id di localStorage (sama pola kayak
+// Roster/Staff/Sponsor). Kalau dipromosikan, rookie masuk ke roster
+// utama lewat sistem roster yang udah ada (saveRoster) — bukan sistem
+// pemain kedua.
+// ----------------------------------------------------------
+const ACADEMY_NAME_POOL = [
+  "Raka", "Fajar", "Dimas", "Rizky", "Arga", "Naufal", "Reza", "Ilham", "Bagas", "Farhan",
+  "Yusuf", "Zaki", "Wahyu", "Dedi", "Rian", "Aldo", "Bima", "Candra", "Dwiki", "Erlangga",
+  "Gilang", "Hafiz", "Irfan", "Jovan", "Kevin", "Lutfi", "Malik", "Nando", "Oscar", "Putra",
+];
+const ACADEMY_SURNAME_POOL = ["Pratama", "Saputra", "Wijaya", "Nugroho", "Hidayat", "Ramadhan", "Kurniawan", "Santoso", "Firmansyah", "Setiawan"];
+
+function academyKey(teamId) {
+  return `mlbb-sim:academy:${teamId}`;
+}
+
+function loadAcademy(teamId) {
+  try {
+    const raw = localStorage.getItem(academyKey(teamId));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // data rusak — anggap kosong
+  }
+  return [];
+}
+
+function saveAcademy(teamId, list) {
+  try {
+    localStorage.setItem(academyKey(teamId), JSON.stringify(list));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+// Bikin 1 rookie baru. Potential dibuat bervariasi (gak semua jadi
+// superstar) dan selalu >= rating awal, maksimal 99.
+function generateAcademyRookie(usedNames) {
+  let name;
+  let guard = 0;
+  do {
+    name = pickRandomFrom(ACADEMY_NAME_POOL) + " " + pickRandomFrom(ACADEMY_SURNAME_POOL);
+    guard++;
+  } while (usedNames.includes(name) && guard < 50);
+
+  const rating = Math.floor(Math.random() * 16) + 55; // 55-70
+  const potential = Math.min(99, rating + Math.floor(Math.random() * 26) + 8); // +8 sampai +33
+  return {
+    id: "rookie-" + Date.now() + "-" + Math.floor(Math.random() * 100000),
+    name,
+    role: pickRandomFrom(ROSTER_ROLES),
+    rating,
+    potential,
+    age: Math.floor(Math.random() * 4) + 16, // 16-19
+    status: "academy", // academy | promoted
+    initialRating: rating,
+    promotedSeason: null,
+    careerLog: [],
+  };
+}
+
+function generateAcademyBatch(teamId, count) {
+  const list = loadAcademy(teamId);
+  const usedNames = list.map((r) => r.name);
+  for (let i = 0; i < count; i++) {
+    const rookie = generateAcademyRookie(usedNames);
+    usedNames.push(rookie.name);
+    rookie.careerLog.push({ season: state.season, text: "👶 Joined Academy" });
+    list.push(rookie);
+  }
+  saveAcademy(teamId, list);
+}
+
+function promoteAcademyPlayer(teamId, rookieId) {
+  const team = state.teams.find((t) => t.id === teamId);
+  const list = loadAcademy(teamId);
+  const rookie = list.find((r) => r.id === rookieId);
+  if (!team || !rookie || rookie.status !== "academy") return;
+
+  const roster = loadRoster(teamId);
+  if (roster[rookie.role] && roster[rookie.role].name) {
+    alert(
+      `Slot ${rookie.role} di roster utama masih diisi ${roster[rookie.role].name}. ` +
+        `Kosongkan/ganti dulu lewat Manage Roster kalau mau promote ${rookie.name}.`
+    );
+    return;
+  }
+
+  roster[rookie.role] = { name: rookie.name, rating: rookie.rating };
+  saveRoster(teamId, roster);
+
+  rookie.status = "promoted";
+  rookie.promotedSeason = state.season;
+  rookie.careerLog.push({ season: state.season, text: "⭐ Promoted to Main Roster" });
+  saveAcademy(teamId, list);
+
+  applyRosterPowerToTeam(team); // kalau tim ini mode Team Power AUTO
+  recordEventNews("academy", { player: rookie.name, team: team.name });
+
+  renderTeamGrid(false);
+  renderAcademy();
+  renderNewsTimeline();
+}
+
+function releaseAcademyPlayer(teamId, rookieId) {
+  const list = loadAcademy(teamId).filter((r) => r.id !== rookieId);
+  saveAcademy(teamId, list);
+  renderAcademy();
+}
+
+// Perkembangan pemain tiap ganti season: nambah umur, rating naik
+// (acak 1-7 poin), tapi gak boleh lewat Potential. Kalau rookie udah
+// dipromosikan, rating di roster utama ikut disinkronkan.
+function developAcademyForTeam(teamId) {
+  const list = loadAcademy(teamId);
+  const roster = loadRoster(teamId);
+  let rosterChanged = false;
+
+  list.forEach((r) => {
+    r.age += 1;
+    const room = r.potential - r.rating;
+    if (room > 0) {
+      const growth = Math.min(room, Math.floor(Math.random() * 7) + 1);
+      r.rating += growth;
+    }
+    if (r.status === "promoted" && roster[r.role] && roster[r.role].name === r.name) {
+      roster[r.role].rating = r.rating;
+      rosterChanged = true;
+    }
+  });
+
+  saveAcademy(teamId, list);
+  if (rosterChanged) saveRoster(teamId, roster);
+}
+
+const academyGrid = document.getElementById("academyGrid");
+
+function renderAcademy() {
+  if (state.teams.length === 0) {
+    academyGrid.innerHTML = `<p class="academy-empty">Belum ada tim di league ini.</p>`;
+    return;
+  }
+
+  academyGrid.innerHTML = state.teams
+    .map((team) => {
+      // academy yang belum pernah dibuat sama sekali -> isi 3 rookie awal
+      if (localStorage.getItem(academyKey(team.id)) === null) {
+        generateAcademyBatch(team.id, 3);
+      }
+      const list = loadAcademy(team.id);
+      const playersHtml =
+        list.length === 0
+          ? `<p class="academy-empty">Academy masih kosong.</p>`
+          : list
+              .map((r) => {
+                const actions =
+                  r.status === "academy"
+                    ? `
+                    <div class="academy-player__actions">
+                      <button data-academy-promote="${team.id}:${r.id}">PROMOTE</button>
+                      <button data-academy-keep="${team.id}:${r.id}">KEEP</button>
+                      <button class="academy-release" data-academy-release="${team.id}:${r.id}">RELEASE</button>
+                    </div>`
+                    : `<div class="academy-empty">✅ Sudah di roster utama${r.promotedSeason ? " (" + r.promotedSeason + ")" : ""}</div>`;
+                return `
+                  <div class="academy-player">
+                    <div class="academy-player__top">
+                      <span class="academy-player__name">${r.name}</span>
+                      <span class="academy-player__role">${r.role}</span>
+                    </div>
+                    <div class="academy-player__stats">OVR ${r.rating} • <span class="pot">POT ${r.potential}</span> • Age ${r.age}</div>
+                    ${actions}
+                  </div>`;
+              })
+              .join("");
+
+      return `
+        <div class="academy-team-card">
+          <div class="academy-team-card__header">
+            <img src="${team.logo}" alt="" />
+            <h4>${team.name}</h4>
+            <button class="academy-team-card__generate" data-academy-generate="${team.id}">+ Rookie</button>
+          </div>
+          ${playersHtml}
+        </div>`;
+    })
+    .join("");
+
+  academyGrid.querySelectorAll("[data-academy-generate]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      generateAcademyBatch(btn.dataset.academyGenerate, 1);
+      renderAcademy();
+    });
+  });
+  academyGrid.querySelectorAll("[data-academy-promote]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const [teamId, rookieId] = btn.dataset.academyPromote.split(":");
+      promoteAcademyPlayer(teamId, rookieId);
+    });
+  });
+  academyGrid.querySelectorAll("[data-academy-keep]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      // KEEP = biarkan di academy, gak ada perubahan data
+      btn.textContent = "✓ KEPT";
+    });
+  });
+  academyGrid.querySelectorAll("[data-academy-release]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!confirm("Release rookie ini dari academy?")) return;
+      const [teamId, rookieId] = btn.dataset.academyRelease.split(":");
+      releaseAcademyPlayer(teamId, rookieId);
+    });
+  });
+}
+
+// ----------------------------------------------------------
+// SEASON AWARDS
+// Dihitung dari data beneran yang ada di league & season aktif:
+// Standings, Knockout, MVP tiap match, rating roster, staff, dan
+// riwayat academy. Kalau datanya belum cukup, kartunya ditampilkan
+// "Data belum cukup" (bukan pemenang asal-asalan).
+// ----------------------------------------------------------
+function collectSeasonMatches() {
+  const matches = [...state.schedule];
+  if (state.knockout) matches.push(...Object.values(state.knockout.matches));
+  return matches.filter((m) => m.played);
+}
+
+function findTeamAndRatingOfPlayer(playerName) {
+  for (const team of state.teams) {
+    const roster = loadRoster(team.id);
+    for (const role of ROSTER_ROLES) {
+      if (roster[role] && roster[role].name === playerName) {
+        return { team, role, rating: roster[role].rating };
+      }
+    }
+  }
+  return null;
+}
+
+// MVP of the Season = pemain paling sering jadi MVP match di season ini
+function computeSeasonMvp() {
+  const tally = {};
+  collectSeasonMatches().forEach((m) => {
+    if (m.mvp && m.mvp.name) tally[m.mvp.name] = (tally[m.mvp.name] || 0) + 1;
+  });
+  let best = null;
+  Object.entries(tally).forEach(([name, count]) => {
+    if (!best || count > best.count) best = { name, count };
+  });
+  if (!best) return null;
+  const info = findTeamAndRatingOfPlayer(best.name);
+  return { ...best, team: info ? info.team : null, role: info ? info.role : null, rating: info ? info.rating : null };
+}
+
+// Player of the Season = rating roster tertinggi di seluruh league
+function computeBestOverallPlayer() {
+  let best = null;
+  state.teams.forEach((team) => {
+    const roster = loadRoster(team.id);
+    ROSTER_ROLES.forEach((role) => {
+      const p = roster[role];
+      if (p && p.name && (!best || p.rating > best.rating)) best = { name: p.name, rating: p.rating, team, role };
+    });
+  });
+  return best;
+}
+
+function computeBestByRole(role) {
+  let best = null;
+  state.teams.forEach((team) => {
+    const p = loadRoster(team.id)[role];
+    if (p && p.name && (!best || p.rating > best.rating)) best = { name: p.name, rating: p.rating, team };
+  });
+  return best;
+}
+
+// Rookie of the Season = rookie academy yang dipromosikan di season ini
+// dengan rating tertinggi
+function computeRookieOfSeason() {
+  let best = null;
+  state.teams.forEach((team) => {
+    loadAcademy(team.id).forEach((r) => {
+      if (r.status === "promoted" && r.promotedSeason === state.season) {
+        if (!best || r.rating > best.rating) best = { ...r, team };
+      }
+    });
+  });
+  return best;
+}
+
+// Most Improved = kenaikan rating terbesar dari rating awal (academy)
+function computeMostImproved() {
+  let best = null;
+  state.teams.forEach((team) => {
+    loadAcademy(team.id).forEach((r) => {
+      const improvement = r.rating - r.initialRating;
+      if (improvement > 0 && (!best || improvement > best.improvement)) best = { ...r, team, improvement };
+    });
+  });
+  return best;
+}
+
+// Team of the Season = juara Knockout kalau ada, kalau belum ya juara Standings
+function computeTeamOfSeason() {
+  if (state.knockout && state.knockout.champion) return state.knockout.champion;
+  const standings = computeStandings();
+  const played = state.schedule.some((m) => m.played);
+  return played && standings[0] ? standings[0].team : null;
+}
+
+// Coach of the Season = Head Coach dari Team of the Season
+function computeCoachOfSeason(teamOfSeason) {
+  if (!teamOfSeason) return null;
+  return loadStaff(teamOfSeason.id).headCoach || null;
+}
+
+function awardCardHtml(title, winner, meta) {
+  if (!winner) {
+    return `
+      <div class="award-card award-card--empty">
+        <div class="award-card__title">${title}</div>
+        <div class="award-card__meta">Data belum cukup</div>
+      </div>`;
+  }
+  return `
+    <div class="award-card">
+      <div class="award-card__title">${title}</div>
+      <div class="award-card__winner">${winner}</div>
+      ${meta ? `<div class="award-card__meta">${meta}</div>` : ""}
+    </div>`;
+}
+
+const awardsGrid = document.getElementById("awardsGrid");
+
+function renderAwards() {
+  const mvp = computeSeasonMvp();
+  const bestPlayer = computeBestOverallPlayer();
+  const rookie = computeRookieOfSeason();
+  const improved = computeMostImproved();
+  const teamOfSeason = computeTeamOfSeason();
+  const coach = computeCoachOfSeason(teamOfSeason);
+
+  const cards = [
+    awardCardHtml("MVP OF THE SEASON", mvp && mvp.name, mvp ? `${mvp.team ? mvp.team.name + " • " : ""}${mvp.count}x MVP${mvp.role ? " • " + mvp.role : ""}` : null),
+    awardCardHtml("PLAYER OF THE SEASON", bestPlayer && bestPlayer.name, bestPlayer ? `${bestPlayer.team.name} • ${bestPlayer.role} • Rating ${bestPlayer.rating}` : null),
+    awardCardHtml("ROOKIE OF THE SEASON", rookie && rookie.name, rookie ? `${rookie.team.name} • ${rookie.role} • OVR ${rookie.rating}` : null),
+    awardCardHtml("COACH OF THE SEASON", coach && coach.name, teamOfSeason ? teamOfSeason.name : null),
+    awardCardHtml("MOST IMPROVED PLAYER", improved && improved.name, improved ? `${improved.team.name} • +${improved.improvement} rating` : null),
+    awardCardHtml("TEAM OF THE SEASON", teamOfSeason && teamOfSeason.name, null),
+  ];
+
+  ROSTER_ROLES.forEach((role) => {
+    const best = computeBestByRole(role);
+    cards.push(awardCardHtml(`BEST ${role.toUpperCase()}`, best && best.name, best ? `${best.team.name} • Rating ${best.rating}` : null));
+  });
+
+  awardsGrid.innerHTML = cards.join("");
+}
+
+document.getElementById("awardsComputeBtn").addEventListener("click", () => {
+  renderAwards();
+  const league = leagues.find((l) => l.id === state.leagueId);
+  recordEventNews("seasonAwards", { league: league ? league.name : state.leagueId, season: state.season });
+  renderNewsTimeline();
+});
+
+// ----------------------------------------------------------
+// SEASON HISTORY (per league, gak hilang pas ganti season)
+// ----------------------------------------------------------
+function seasonHistoryKey(leagueId) {
+  return `mlbb-sim:season-history:${leagueId}`;
+}
+
+function loadSeasonHistory(leagueId) {
+  try {
+    const raw = localStorage.getItem(seasonHistoryKey(leagueId));
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveSeasonHistory(leagueId, list) {
+  try {
+    localStorage.setItem(seasonHistoryKey(leagueId), JSON.stringify(list));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+// ----------------------------------------------------------
+// SEASON CALENDAR
+// Kalender SIMULATOR (bukan jadwal resmi dunia nyata), per league.
+// NEXT EVENT = maju 1 bulan. Di Desember (Season Awards) awards
+// otomatis dihitung; NEXT EVENT berikutnya = Season Transition:
+// simpan history, kembangkan rating academy, generate rookie baru,
+// lalu mulai season baru (nomor season +1, hasil match direset).
+// ----------------------------------------------------------
+const SEASON_CALENDAR_MONTHS = [
+  { name: "January", event: "Pre-Season", hint: "Persiapan season — cek roster & academy tiap tim." },
+  { name: "February", event: "MPL Regular Season", hint: "Mainkan match di tab Standings." },
+  { name: "March", event: "MPL Regular Season", hint: "Lanjutkan Regular Season di tab Standings." },
+  { name: "April", event: "MPL Playoffs", hint: "Generate Bracket & mainkan Knockout di tab Knockout." },
+  { name: "May", event: "Transfer / Off Season", hint: "Waktu ngatur roster, staff, dan promote rookie academy." },
+  { name: "June", event: "MSC", hint: "Buka tab MSC kalau ke-8 league udah punya juara." },
+  { name: "July", event: "MSC", hint: "Lanjutkan MSC di tab MSC." },
+  { name: "August", event: "Off Season", hint: "Off season — waktu bebas ngurus tim." },
+  { name: "September", event: "M-Series Qualification", hint: "Pastikan Grand Final tiap league udah selesai." },
+  { name: "October", event: "M-Series", hint: "Buka tab M-Series buat Swiss Stage & Knockout." },
+  { name: "November", event: "International Events", hint: "Event internasional lain (misal SEA Games) di tab-nya masing-masing." },
+  { name: "December", event: "Season Awards", hint: "Season selesai — cek tab Awards. NEXT EVENT lagi buat mulai season baru." },
+];
+
+function calendarKey(leagueId) {
+  return `mlbb-sim:calendar:${leagueId}`;
+}
+
+function loadCalendar(leagueId) {
+  try {
+    const raw = localStorage.getItem(calendarKey(leagueId));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // data rusak — mulai dari Januari
+  }
+  return { monthIndex: 0, log: [] };
+}
+
+function saveCalendar(leagueId, cal) {
+  try {
+    localStorage.setItem(calendarKey(leagueId), JSON.stringify(cal));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+function performSeasonTransition() {
+  const league = leagues.find((l) => l.id === state.leagueId);
+  const standings = computeStandings();
+  const mvp = computeSeasonMvp();
+  const rookie = computeRookieOfSeason();
+  const teamOfSeason = computeTeamOfSeason();
+
+  // 1-5. tutup season lama + simpan hasil ke Season History
+  const history = loadSeasonHistory(state.leagueId);
+  history.unshift({
+    season: state.season,
+    champion: state.knockout && state.knockout.champion ? state.knockout.champion.name : teamOfSeason ? teamOfSeason.name : "-",
+    mvp: mvp ? mvp.name : "-",
+    rookie: rookie ? rookie.name : "-",
+    topOfStandings: standings[0] && state.schedule.some((m) => m.played) ? standings[0].team.name : "-",
+  });
+  saveSeasonHistory(state.leagueId, history);
+
+  // catat juara ke career log rookie yang ada di tim juara (kalau ada)
+  const champTeam = state.knockout && state.knockout.champion;
+  if (champTeam) {
+    const champAcademy = loadAcademy(champTeam.id);
+    champAcademy.forEach((r) => {
+      if (r.status === "promoted") r.careerLog.push({ season: state.season, text: "🏆 " + (league ? league.name : "League") + " Champion" });
+    });
+    saveAcademy(champTeam.id, champAcademy);
+  }
+
+  // 6-8. kembangkan academy semua tim (umur +1, rating naik) + rookie baru
+  state.teams.forEach((t) => {
+    developAcademyForTeam(t.id);
+    generateAcademyBatch(t.id, 2);
+  });
+
+  // 9-11. mulai season baru (nomor +1). loadTeamsForCurrentSelection()
+  // otomatis reset jadwal & knockout, roster/academy/staff tetap
+  // karena disimpan per team id (bukan per season).
+  const nextNum = (parseInt(String(state.season).replace(/[^0-9]/g, ""), 10) || 0) + 1;
+  state.season = "S" + nextNum;
+  syncSeasonInputFromState();
+  loadTeamsForCurrentSelection();
+}
+
+function handleCalendarNextEvent() {
+  const league = leagues.find((l) => l.id === state.leagueId);
+  const leagueName = league ? league.name : state.leagueId;
+  const cal = loadCalendar(state.leagueId);
+
+  if (cal.monthIndex >= SEASON_CALENDAR_MONTHS.length - 1) {
+    // udah di Desember -> Season Transition
+    const finishedSeason = state.season;
+    performSeasonTransition();
+    const newCal = { monthIndex: 0, log: [`${leagueName} ${state.season} dimulai. Rookie academy baru sudah digenerate.`, `${leagueName} ${finishedSeason} ditutup & tersimpan di Season History.`] };
+    saveCalendar(state.leagueId, newCal);
+  } else {
+    cal.monthIndex += 1;
+    const month = SEASON_CALENDAR_MONTHS[cal.monthIndex];
+    cal.log = cal.log || [];
+    cal.log.unshift(`${month.name} — ${month.event}. ${month.hint}`);
+
+    if (month.event === "Season Awards") {
+      renderAwards();
+      recordEventNews("seasonAwards", { league: leagueName, season: state.season });
+      renderNewsTimeline();
+      cal.log.unshift(`🏆 Season Awards ${leagueName} ${state.season} sudah dihitung — cek tab Awards.`);
+    }
+    saveCalendar(state.leagueId, cal);
+  }
+
+  renderCalendar();
+  renderAcademy();
+  renderAwards();
+}
+
+const calendarGrid = document.getElementById("calendarGrid");
+const calendarHeaderInfo = document.getElementById("calendarHeaderInfo");
+const calendarEventLog = document.getElementById("calendarEventLog");
+const seasonHistoryList = document.getElementById("seasonHistoryList");
+
+function renderCalendar() {
+  const league = leagues.find((l) => l.id === state.leagueId);
+  const cal = loadCalendar(state.leagueId);
+  const current = SEASON_CALENDAR_MONTHS[cal.monthIndex];
+
+  calendarHeaderInfo.textContent = `${league ? league.name : state.leagueId} — Season ${String(state.season).replace(/[^0-9]/g, "")} • ${current.name}: ${current.event}`;
+
+  calendarGrid.innerHTML = SEASON_CALENDAR_MONTHS.map((m, idx) => {
+    const cls = idx === cal.monthIndex ? "calendar-month--active" : idx < cal.monthIndex ? "calendar-month--past" : "";
+    return `
+      <div class="calendar-month ${cls}">
+        <div class="calendar-month__name">${m.name}</div>
+        <div class="calendar-month__event">${m.event}</div>
+      </div>`;
+  }).join("");
+
+  calendarEventLog.innerHTML =
+    cal.log && cal.log.length > 0
+      ? cal.log.map((line) => `<div>• ${line}</div>`).join("")
+      : `<div>Belum ada event. Klik ▶ NEXT EVENT buat mulai.</div>`;
+
+  const nextBtn = document.getElementById("calendarNextEventBtn");
+  nextBtn.textContent = cal.monthIndex >= SEASON_CALENDAR_MONTHS.length - 1 ? "▶ MULAI SEASON BARU" : "▶ NEXT EVENT";
+
+  const history = loadSeasonHistory(state.leagueId);
+  seasonHistoryList.innerHTML =
+    history.length === 0
+      ? `<p class="academy-empty">Belum ada season yang selesai.</p>`
+      : history
+          .map(
+            (h) => `
+        <div class="season-history-item">
+          <div class="season-history-item__season">${h.season}</div>
+          <div>🏆 Champion: ${h.champion}</div>
+          <div>🥇 MVP: ${h.mvp}</div>
+          <div>🌱 Rookie: ${h.rookie}</div>
+        </div>`
+          )
+          .join("");
+}
+
+document.getElementById("calendarNextEventBtn").addEventListener("click", handleCalendarNextEvent);
+
+function renderSeasonSystems() {
+  renderCalendar();
+  renderAcademy();
+  renderAwards();
+}
+
+// data Awards bergantung pada MVP match, roster, dan academy yang bisa
+// berubah kapan aja — jadi dihitung ulang tiap tab-nya dibuka
+document.querySelector('[data-tab="awards"]').addEventListener("click", renderAwards);
+document.querySelector('[data-tab="academy"]').addEventListener("click", renderAcademy);
+document.querySelector('[data-tab="calendar"]').addEventListener("click", renderCalendar);
 
 // ----------------------------------------------------------
 // INIT

@@ -44,6 +44,9 @@
     <button class="tab" data-tab="news">📰 News</button>
     <button class="tab" data-tab="msc">MSC</button>
     <button class="tab" data-tab="seagames">SEA Games</button>
+    <button class="tab" data-tab="calendar">📅 Calendar</button>
+    <button class="tab" data-tab="academy">👶 Academy</button>
+    <button class="tab" data-tab="awards">🏆 Awards</button>
   </nav>
 
   <main class="content">
@@ -366,6 +369,54 @@
       <div class="news-timeline" id="seaNewsTimeline">
         <!-- diisi via JS -->
       </div>
+    </section>
+
+    <!-- ============ SEASON CALENDAR ============ -->
+    <section id="calendar" class="panel">
+      <div class="panel__header">
+        <h2>📅 Season Calendar</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--primary" id="calendarNextEventBtn">▶ NEXT EVENT</button>
+        </div>
+      </div>
+      <p class="knockout-hint">
+        Kalender simulator per league yang lagi aktif — bukan jadwal resmi dunia nyata, cuma penanda
+        perjalanan season. Klik NEXT EVENT buat maju ke bulan berikutnya.
+      </p>
+
+      <div class="calendar-header" id="calendarHeaderInfo"><!-- diisi via JS --></div>
+      <div class="calendar-grid" id="calendarGrid"><!-- diisi via JS --></div>
+      <div class="calendar-event-log" id="calendarEventLog"><!-- diisi via JS --></div>
+
+      <h3 class="mseries-section-title">Season History</h3>
+      <div class="season-history-list" id="seasonHistoryList"><!-- diisi via JS --></div>
+    </section>
+
+    <!-- ============ YOUTH ACADEMY ============ -->
+    <section id="academy" class="panel">
+      <div class="panel__header">
+        <h2>👶 Youth Academy</h2>
+      </div>
+      <p class="knockout-hint">
+        Tiap tim di league yang lagi aktif punya academy sendiri. Promote rookie ke roster utama
+        (butuh slot role yang masih kosong di Manage Roster), atau release kalau gak dipakai.
+      </p>
+      <div class="academy-grid" id="academyGrid"><!-- diisi via JS --></div>
+    </section>
+
+    <!-- ============ SEASON AWARDS ============ -->
+    <section id="awards" class="panel">
+      <div class="panel__header">
+        <h2>🏆 Season Awards</h2>
+        <div class="panel__header-actions">
+          <button class="btn btn--primary" id="awardsComputeBtn">🏆 Hitung Awards Season Ini</button>
+        </div>
+      </div>
+      <p class="knockout-hint">
+        Dihitung dari data yang beneran ada: Standings, Knockout, MVP tiap match, dan rating roster
+        league & season yang lagi aktif.
+      </p>
+      <div class="awards-grid" id="awardsGrid"><!-- diisi via JS --></div>
     </section>
 
   </main>
