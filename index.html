@@ -485,6 +485,36 @@
     </div>
   </div>
 
+  <!-- ============ PRE-MATCH PRESS CONFERENCE MODAL ============ -->
+  <div class="roster-modal-overlay" id="pressConOverlay" hidden>
+    <div class="roster-modal presscon-modal">
+      <div class="roster-modal__header">
+        <h3>🎙️ Pre-Match Press Conference</h3>
+        <button class="roster-modal__close" id="pressConClose" title="Tutup">✕</button>
+      </div>
+
+      <div class="presscon-matchup" id="pressConMatchup"><!-- diisi via JS --></div>
+      <div class="presscon-progress" id="pressConProgress"><!-- diisi via JS --></div>
+
+      <div id="pressConQuestionView">
+        <p class="presscon-question" id="pressConQuestionText"></p>
+        <div class="presscon-answers" id="pressConAnswers"><!-- diisi via JS --></div>
+      </div>
+
+      <div id="pressConResultView" hidden>
+        <h4 class="presscon-result-title">🎙️ PRESS CONFERENCE COMPLETE</h4>
+        <div class="presscon-effects" id="pressConEffects"><!-- diisi via JS --></div>
+        <div class="roster-modal__actions">
+          <button class="btn btn--primary" id="pressConStartMatchBtn">▶ START MATCH</button>
+        </div>
+      </div>
+
+      <div class="roster-modal__actions" id="pressConSkipRow">
+        <button class="btn btn--ghost" id="pressConSkipBtn">SKIP PRESS CONFERENCE</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ NEWS DETAIL MODAL ============ -->
   <div class="roster-modal-overlay" id="newsModalOverlay" hidden>
     <div class="roster-modal news-modal">

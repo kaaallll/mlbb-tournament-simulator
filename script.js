@@ -1012,6 +1012,13 @@ const NEWS_TEMPLATES = {
       "{league} {season} resmi berakhir dan penghargaan musim telah diumumkan. Selamat kepada seluruh pemenang, dan sampai jumpa di season berikutnya!",
     ],
   },
+  pressConference: {
+    label: "🎙️ Press Conference",
+    headlines: ["🎙️ {team} Bicara di Press Conference Jelang Pertandingan", "🔥 Pernyataan {team} Jadi Sorotan Media"],
+    bodies: [
+      "Perwakilan {team} tampil di sesi press conference menjelang pertandingan di {league} {season}, membahas persiapan dan target tim menghadapi laga berikutnya.",
+    ],
+  },
 };
 
 const INTERVIEW_QUESTIONS = [
@@ -1973,6 +1980,7 @@ function renderSchedule() {
 
     const mvpHtml = match.played ? mvpRowHtml("schedule", match.id, match.winnerId, match.mvp) : "";
     const newsActionsHtml = match.played ? matchNewsActionsHtml("sched:" + match.id) : "";
+    const pcBtn = match.played ? "" : pressConButtonHtml("sched:" + match.id);
 
     return `
       <div class="schedule-item ${match.played ? "" : "schedule-item--pending"}">
@@ -1981,6 +1989,7 @@ function renderSchedule() {
           <span class="schedule-item__teams">${teamA.short || teamA.name} ${scoreText} ${teamB.short || teamB.name}</span>
           ${manualInputs}
           ${randomBtn}
+          ${pcBtn}
         </div>
         ${mvpHtml}
         ${newsActionsHtml}
@@ -2058,6 +2067,18 @@ function renderSchedule() {
   });
 
   wireMatchNewsActions(scheduleList);
+
+  scheduleList.querySelectorAll("[data-open-presscon]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const matchKey = btn.dataset.openPresscon;
+      const match = state.schedule.find((m) => "sched:" + m.id === matchKey);
+      if (!match) return;
+      const teamA = teamById(match.teamAId);
+      const teamB = teamById(match.teamBId);
+      if (!teamA || !teamB) return;
+      openPressConference(matchKey, teamA, teamB, "regular", () => simulateOneMatch(match.id));
+    });
+  });
 }
 
 // Input skor manual untuk match regular season (bukan random)
@@ -2098,7 +2119,7 @@ function simulateOneMatch(matchId) {
   const teamB = teamById(match.teamBId);
   if (!teamA || !teamB) return;
 
-  const result = simulateMatch(teamA, teamB, 3); // regular season pakai BO3
+  const result = simulateMatchWithPc("sched:" + match.id, teamA, teamB, 3); // regular season pakai BO3
   match.played = true;
   match.winnerId = result.winner.id;
   match.scoreA = result.winner.id === teamA.id ? result.winnerScore : result.loserScore;
@@ -2122,7 +2143,7 @@ simulateScheduleBtn.addEventListener("click", () => {
     if (!teamA || !teamB) return;
 
     // regular season pakai format BO3
-    const result = simulateMatch(teamA, teamB, 3);
+    const result = simulateMatchWithPc("sched:" + match.id, teamA, teamB, 3);
     match.played = true;
     match.winnerId = result.winner.id;
     match.scoreA = result.winner.id === teamA.id ? result.winnerScore : result.loserScore;
@@ -2219,7 +2240,7 @@ function simulateKnockoutMatch(matchId) {
   const match = kb.matches[matchId];
   if (!match || match.played || !match.teamA || !match.teamB) return;
 
-  const result = simulateMatch(match.teamA, match.teamB, match.bestOf);
+  const result = simulateMatchWithPc("ko:" + matchId, match.teamA, match.teamB, match.bestOf);
   match.played = true;
   match.winnerId = result.winner.id;
   match.scoreA = result.winner.id === match.teamA.id ? result.winnerScore : result.loserScore;
@@ -2308,6 +2329,7 @@ function knockoutMatchCardHtml(match) {
         <span>-</span>
         <input type="number" min="0" class="manual-score-input" data-manual-knockout-b="${match.id}" placeholder="0" />
         <button class="btn btn--ghost manual-score-submit" data-manual-knockout-submit="${match.id}">✓ Input Skor</button>
+        ${pressConButtonHtml("ko:" + match.id)}
       </div>`;
   }
 
@@ -2445,6 +2467,19 @@ function renderKnockout() {
   wireMatchNewsActions(upperBracketEl);
   wireMatchNewsActions(lowerBracketEl);
   wireMatchNewsActions(grandFinalEl);
+
+  [upperBracketEl, lowerBracketEl, grandFinalEl].forEach((container) => {
+    container.querySelectorAll("[data-open-presscon]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const matchKey = btn.dataset.openPresscon; // format: "ko:m3"
+        const matchId = matchKey.slice(3);
+        const match = kb.matches[matchId];
+        if (!match || !match.teamA || !match.teamB) return;
+        const stage = matchId === "m8" ? "grandFinal" : "playoff";
+        openPressConference(matchKey, match.teamA, match.teamB, stage, () => simulateKnockoutMatch(matchId));
+      });
+    });
+  });
 
   if (kb.champion) {
     championBanner.hidden = false;
@@ -5001,6 +5036,476 @@ function renderSeasonSystems() {
 document.querySelector('[data-tab="awards"]').addEventListener("click", renderAwards);
 document.querySelector('[data-tab="academy"]').addEventListener("click", renderAcademy);
 document.querySelector('[data-tab="calendar"]').addEventListener("click", renderCalendar);
+
+// ----------------------------------------------------------
+// PRE-MATCH PRESS CONFERENCE
+// Gerbang opsional sebelum simulasi match acak (bukan wajib — tombol
+// Simulate/Input Skor yang lama tetap ada & tetap jalan normal kalau
+// press conference-nya di-skip atau gak dibuka sama sekali).
+//
+// Question bank modular: tinggal tambah string baru ke array kategori
+// di bawah buat nambah pertanyaan. Jawaban gak ditulis manual satu-satu
+// per pertanyaan — di-generate dari pool jawaban per "personality type"
+// (CALM/CONFIDENT/RESPECTFUL/AGGRESSIVE/HUMBLE/TRASH_TALK/NEUTRAL) biar
+// gampang dikembangin tanpa nulis ratusan jawaban custom.
+// ----------------------------------------------------------
+const PRESS_QUESTION_BANK = {
+  general: [
+    "Apa persiapan utama tim menjelang pertandingan ini?",
+    "Apa target kalian pada pertandingan hari ini?",
+    "Bagaimana kondisi tim sebelum pertandingan?",
+    "Seberapa penting pertandingan ini?",
+    "Apa fokus utama tim hari ini?",
+    "Apakah persiapan kali ini berbeda dari pertandingan sebelumnya?",
+    "Bagaimana suasana tim menjelang pertandingan?",
+    "Apa yang paling kalian persiapkan sebelum naik ke stage?",
+    "Apakah ada strategi khusus yang disiapkan?",
+    "Apa yang ingin kalian tunjukkan kepada fans hari ini?",
+    "Seberapa siap tim kalian?",
+    "Apa prioritas utama sebelum pertandingan?",
+    "Apakah latihan terakhir berjalan sesuai rencana?",
+    "Apa yang paling diperhatikan dalam persiapan kali ini?",
+  ],
+  opponent: [
+    "Bagaimana kalian melihat kekuatan lawan?",
+    "Siapa pemain lawan yang paling perlu diwaspadai?",
+    "Apa kelebihan utama lawan?",
+    "Apa kelemahan lawan yang mungkin bisa dimanfaatkan?",
+    "Bagaimana cara kalian menghadapi gaya bermain mereka?",
+    "Lawan sedang dalam performa bagus. Apakah itu menjadi tekanan?",
+    "Apakah kalian mempelajari pertandingan terakhir mereka?",
+    "Apa yang membedakan tim kalian dengan lawan?",
+    "Apakah kalian memiliki strategi khusus menghadapi pemain tertentu?",
+    "Seberapa sulit pertandingan ini?",
+    "Apakah ada strategi lawan yang perlu diantisipasi?",
+    "Bagaimana kalian membaca permainan lawan?",
+    "Apakah kalian sudah menyiapkan counter?",
+  ],
+  confidence: [
+    "Seberapa percaya diri kalian menghadapi pertandingan ini?",
+    "Apakah kalian yakin bisa memenangkan pertandingan?",
+    "Apakah kalian merasa tim kalian lebih kuat?",
+    "Apa yang membuat kalian percaya diri?",
+    "Apakah kalian siap menghadapi pertandingan panjang?",
+    "Apa yang akan dilakukan jika tertinggal lebih dulu?",
+    "Seberapa yakin kalian dengan strategi yang disiapkan?",
+    "Apakah target kalian adalah kemenangan?",
+    "Apakah kalian merasa sudah berada di level terbaik?",
+    "Apa yang membuat kalian yakin bisa mengalahkan lawan?",
+  ],
+  player: [
+    "Siapa pemain yang sedang berada dalam performa terbaik?",
+    "Bagaimana chemistry roster kalian?",
+    "Bagaimana perkembangan pemain muda kalian?",
+    "Apa peran pemain baru?",
+    "Apakah ada pemain yang mengalami peningkatan performa?",
+    "Bagaimana komunikasi antar pemain?",
+    "Seberapa penting pengalaman pemain senior?",
+    "Apakah ada pemain yang mendapat tugas khusus?",
+    "Siapa yang paling siap menghadapi pertandingan ini?",
+    "Bagaimana hubungan antar pemain?",
+  ],
+  coach: [
+    "Apa instruksi utama dari coach?",
+    "Apakah ada perubahan strategi?",
+    "Seberapa besar peran coach dalam persiapan?",
+    "Apakah tim melakukan latihan khusus?",
+    "Bagaimana komunikasi pemain dengan coaching staff?",
+    "Apakah ada strategi yang sengaja dirahasiakan?",
+    "Apa fokus utama sesi latihan terakhir?",
+    "Apakah coach memberikan pendekatan berbeda?",
+    "Bagaimana coach membantu pemain menghadapi tekanan?",
+  ],
+  pressure: [
+    "Apakah posisi klasemen memberikan tekanan?",
+    "Bagaimana menghadapi ekspektasi fans?",
+    "Apakah kekalahan hari ini akan memengaruhi perjalanan tim?",
+    "Bagaimana kalian menghadapi kritik?",
+    "Apakah kalian merasa berada di bawah tekanan?",
+    "Apakah tekanan membuat tim semakin termotivasi?",
+    "Bagaimana cara menjaga fokus?",
+    "Apakah posisi di klasemen membuat pertandingan ini semakin penting?",
+  ],
+  winningStreak: [
+    "Tim kalian sedang dalam winning streak. Apakah ada tekanan untuk mempertahankannya?",
+    "Apa rahasia konsistensi tim?",
+    "Apakah kalian mulai percaya diri menjadi kandidat juara?",
+    "Seberapa penting menjaga momentum?",
+    "Apakah winning streak membuat kalian bermain lebih percaya diri?",
+    "Apakah kalian takut streak ini berakhir?",
+    "Bagaimana cara menjaga performa tetap stabil?",
+  ],
+  losingStreak: [
+    "Tim kalian baru mengalami beberapa kekalahan. Apa yang harus diperbaiki?",
+    "Bagaimana cara tim bangkit?",
+    "Apakah kalian merasa kehilangan kepercayaan diri?",
+    "Apa yang berubah setelah kekalahan terakhir?",
+    "Bagaimana coach membantu tim melewati masa sulit?",
+    "Apakah ada masalah yang harus segera diselesaikan?",
+    "Apa yang ingin kalian buktikan setelah kekalahan sebelumnya?",
+  ],
+  playoff: [
+    "Seberapa penting pertandingan playoff ini?",
+    "Apakah target kalian hanya lolos atau menjadi juara?",
+    "Bagaimana persiapan menghadapi sistem knockout?",
+    "Apakah pengalaman playoff membantu?",
+    "Apakah tekanan playoff berbeda dari regular season?",
+    "Apa kunci agar tidak melakukan kesalahan?",
+    "Seberapa penting momentum dalam playoff?",
+  ],
+  grandFinal: [
+    "Kalian tinggal satu pertandingan dari gelar juara. Apa yang ada di pikiran kalian?",
+    "Seberapa besar tekanan di Grand Final?",
+    "Apa yang akan menjadi kunci kemenangan?",
+    "Apakah kalian sudah membayangkan mengangkat trofi?",
+    "Apa pesan kalian kepada fans sebelum pertandingan terbesar musim ini?",
+    "Apakah pengalaman season ini membantu kalian?",
+    "Bagaimana kalian menjaga mental sebelum pertandingan terbesar?",
+    "Apa yang ingin kalian buktikan di Grand Final?",
+    "Seberapa besar arti trofi ini bagi organisasi?",
+  ],
+  rivalry: [
+    "Pertandingan ini dianggap sebagai rivalitas besar. Apa pendapatmu?",
+    "Apakah ada motivasi tambahan ketika menghadapi rival?",
+    "Bagaimana kalian menjaga emosi?",
+    "Apakah pertandingan melawan rival terasa berbeda?",
+    "Seberapa penting memenangkan pertandingan ini bagi fans?",
+    "Apakah persiapan melawan rival berbeda?",
+  ],
+  rookie: [
+    "Rookie kalian mendapatkan kesempatan bermain hari ini. Apa harapan kalian?",
+    "Bagaimana perkembangan pemain muda tersebut?",
+    "Apakah kalian percaya rookie bisa tampil di level tertinggi?",
+    "Seberapa besar kontribusi academy terhadap roster?",
+    "Apakah rookie tersebut sudah siap menghadapi tekanan?",
+    "Bagaimana senior membantu rookie beradaptasi?",
+    "Apa yang membuat rookie tersebut mendapatkan kesempatan?",
+  ],
+  comeback: [
+    "Bagaimana kalian bisa membalikkan keadaan musim ini?",
+    "Apa yang membuat tim tetap percaya diri ketika tertinggal?",
+    "Apakah comeback belakangan meningkatkan kepercayaan diri tim?",
+    "Apa yang kalian pelajari dari pertandingan-pertandingan sulit?",
+    "Apa yang membuat tim tidak menyerah?",
+  ],
+  international: [
+    "Bagaimana persiapan menghadapi tim dari region lain?",
+    "Apakah gaya bermain region lain berbeda?",
+    "Apa target kalian di turnamen internasional?",
+    "Apakah pengalaman internasional sebelumnya membantu?",
+    "Seberapa penting membawa nama region kalian?",
+    "Apakah kalian siap menghadapi lawan yang belum pernah ditemui?",
+    "Apa yang harus dilakukan agar bisa bersaing secara internasional?",
+  ],
+  championship: [
+    "Apakah kalian merasa menjadi kandidat juara?",
+    "Apa yang harus dilakukan untuk memenangkan trofi?",
+    "Seberapa penting gelar ini bagi organisasi?",
+    "Apa yang ingin kalian buktikan musim ini?",
+    "Apa pesan kalian kepada fans?",
+    "Seberapa besar motivasi untuk menjadi juara?",
+  ],
+};
+
+// Jawaban di-generate dari pool per personality type, bukan ditulis
+// manual per pertanyaan — biar question bank gampang ditambah tanpa
+// harus nulis jawaban baru tiap kali.
+const PC_ANSWER_POOL = {
+  CALM: ["Kami tetap tenang dan fokus ke rencana yang udah disiapkan.", "Kami coba jaga kepala dingin, apapun yang terjadi nanti."],
+  CONFIDENT: ["Kami yakin bisa tampil maksimal dan raih hasil terbaik.", "Kami percaya diri dengan persiapan yang sudah kami lakukan."],
+  RESPECTFUL: ["Lawan kami kuat, dan kami menghormati itu.", "Siapapun lawannya, kami tetap menghargai usaha mereka."],
+  AGGRESSIVE: ["Kami datang buat menang, gak ada kompromi.", "Kami akan main habis-habisan dari menit pertama."],
+  HUMBLE: ["Kami masih banyak belajar, semoga hasilnya baik.", "Kami cuma berusaha semaksimal mungkin, biar hasil yang bicara."],
+  TRASH_TALK: ["Mereka bakal kaget sama permainan kami nanti.", "Gampang kok, kami udah siapin semuanya buat mereka."],
+  NEUTRAL: ["Kami lihat aja gimana jalannya pertandingan nanti.", "Semua tim punya peluang, kita lihat saja di lapangan."],
+};
+
+// Efek kecil per personality — sengaja dibuat kecil biar gak ada satu
+// tipe jawaban yang selalu "paling benar", dan gak pernah otomatis
+// bikin tim menang.
+const PC_EFFECTS = {
+  CALM: { morale: 1, pressure: -1 },
+  CONFIDENT: { confidence: 2, pressure: 1 },
+  RESPECTFUL: { mediaReputation: 2 },
+  AGGRESSIVE: { fanHype: 2, mediaReputation: 1 },
+  HUMBLE: { mediaReputation: 1, pressure: -1 },
+  TRASH_TALK: { fanHype: 3, mediaReputation: 2, pressure: 2 },
+  NEUTRAL: {},
+};
+
+const PC_PERSONALITIES = Object.keys(PC_ANSWER_POOL);
+
+// ---- Team vibe stats (Morale, Confidence, Media Reputation, Fan Hype) ----
+function teamStatsKey(teamId) {
+  return `mlbb-sim:teamstats:${teamId}`;
+}
+
+function loadTeamStats(teamId) {
+  try {
+    const raw = localStorage.getItem(teamStatsKey(teamId));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // data rusak — mulai dari baseline
+  }
+  return { morale: 50, confidence: 50, mediaReputation: 50, fanHype: 50 };
+}
+
+function saveTeamStats(teamId, stats) {
+  try {
+    localStorage.setItem(teamStatsKey(teamId), JSON.stringify(stats));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+function clampStat(v) {
+  return Math.max(0, Math.min(100, v));
+}
+
+// ---- Press conference history per match (biar gak muncul 2x) ----
+function pcResultKey(matchKey) {
+  return `mlbb-sim:presscon:${matchKey}`;
+}
+
+function loadPcResult(matchKey) {
+  try {
+    const raw = localStorage.getItem(pcResultKey(matchKey));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function savePcResult(matchKey, result) {
+  try {
+    localStorage.setItem(pcResultKey(matchKey), JSON.stringify(result));
+  } catch (e) {
+    // skip, gak fatal
+  }
+}
+
+// ---- Context-aware category pool ----
+// Bukan pure random dari semua kategori — kategori yang relevan sama
+// kondisi match (playoff/grand final/winning-losing streak/rookie
+// debut) di-"bobotin" lebih sering muncul, tapi kategori umum tetap
+// selalu ada biar gak monoton.
+function getRecentForm(teamId, count) {
+  const finished = state.schedule.filter((m) => m.played && (m.teamAId === teamId || m.teamBId === teamId));
+  const recent = finished.slice(-count);
+  return recent.map((m) => m.winnerId === teamId);
+}
+
+function buildPcCategoryPool(teamId, stage) {
+  const pool = ["general", "general", "opponent", "opponent", "confidence", "player", "coach", "pressure"];
+
+  if (stage === "playoff") pool.push("playoff", "playoff", "playoff");
+  if (stage === "grandFinal") pool.push("grandFinal", "grandFinal", "grandFinal", "championship", "championship");
+
+  const recentForm = getRecentForm(teamId, 3);
+  if (recentForm.length >= 2 && recentForm.every((w) => w === true)) pool.push("winningStreak", "winningStreak");
+  if (recentForm.length >= 2 && recentForm.every((w) => w === false)) pool.push("losingStreak", "losingStreak");
+
+  const hasFreshRookie = state.teams
+    .find((t) => t.id === teamId) &&
+    loadAcademy(teamId).some((r) => r.status === "promoted" && r.promotedSeason === state.season);
+  if (hasFreshRookie) pool.push("rookie", "rookie");
+
+  if (Math.random() < 0.15) pool.push("rivalry");
+  if (Math.random() < 0.15) pool.push("comeback");
+
+  return pool;
+}
+
+// Pilih N pertanyaan unik (gak boleh dobel dalam satu sesi)
+function pickPressConferenceQuestions(teamId, stage, count) {
+  const pool = buildPcCategoryPool(teamId, stage);
+  const usedQuestions = new Set();
+  const picked = [];
+
+  let guard = 0;
+  while (picked.length < count && guard < 500) {
+    guard++;
+    const category = pickRandomFrom(pool);
+    const bank = PRESS_QUESTION_BANK[category] || PRESS_QUESTION_BANK.general;
+    const question = pickRandomFrom(bank);
+    if (usedQuestions.has(question)) continue;
+    usedQuestions.add(question);
+    picked.push({ category, question });
+  }
+
+  return picked;
+}
+
+// Generate 3-4 pilihan jawaban acak (personality beda-beda, urutan diacak)
+function buildAnswerOptions() {
+  const count = Math.random() < 0.5 ? 3 : 4;
+  const personalities = shuffleArray(PC_PERSONALITIES).slice(0, count);
+  return personalities.map((type) => ({ type, text: pickRandomFrom(PC_ANSWER_POOL[type]) }));
+}
+
+// ---- Wrapper simulasi — TIDAK mengubah simulateMatch/decideWinner
+// sama sekali. Cuma bikin salinan objek tim dengan strength dinaikkan/
+// diturunin dikit (efek kecil hasil Press Conference), lempar ke
+// simulateMatch yang lama persis kayak biasa. Kalau belum ada Press
+// Conference buat match ini, hasilnya 100% sama kayak sebelum fitur
+// ini ada.
+function simulateMatchWithPc(matchKey, teamA, teamB, bestOf) {
+  const pc = loadPcResult(matchKey);
+  if (!pc || !pc.completed || !pc.strengthModifier) {
+    return simulateMatch(teamA, teamB, bestOf);
+  }
+  const adjustedTeam = pc.teamId === teamA.id ? { ...teamA, strength: Math.max(1, teamA.strength + pc.strengthModifier) } : teamA;
+  const adjustedTeamB = pc.teamId === teamB.id ? { ...teamB, strength: Math.max(1, teamB.strength + pc.strengthModifier) } : teamB;
+  return simulateMatch(adjustedTeam, adjustedTeamB, bestOf);
+}
+
+// ---- Modal ----
+const pressConOverlay = document.getElementById("pressConOverlay");
+const pressConMatchup = document.getElementById("pressConMatchup");
+const pressConProgress = document.getElementById("pressConProgress");
+const pressConQuestionView = document.getElementById("pressConQuestionView");
+const pressConQuestionText = document.getElementById("pressConQuestionText");
+const pressConAnswers = document.getElementById("pressConAnswers");
+const pressConResultView = document.getElementById("pressConResultView");
+const pressConEffects = document.getElementById("pressConEffects");
+const pressConSkipRow = document.getElementById("pressConSkipRow");
+
+let pcSession = null; // { matchKey, kind, onStartMatch, teamA, teamB, questions, index, effects }
+
+function pcQuestionCountForStage(stage) {
+  if (stage === "grandFinal") return 5;
+  if (stage === "playoff") return 4;
+  return 3;
+}
+
+// onStartMatch: fungsi yang dipanggil kalau user klik START MATCH
+// setelah conference selesai (biasanya = jalanin simulateOneMatch/
+// simulateKnockoutMatch buat match ini)
+function openPressConference(matchKey, teamA, teamB, stage, onStartMatch) {
+  if (loadPcResult(matchKey)) return; // udah pernah, jangan dibuka lagi
+  const count = pcQuestionCountForStage(stage);
+  pcSession = {
+    matchKey,
+    teamA,
+    teamB,
+    onStartMatch,
+    questions: pickPressConferenceQuestions(teamA.id, stage, count),
+    index: 0,
+    effects: { morale: 0, confidence: 0, mediaReputation: 0, fanHype: 0, pressure: 0 },
+  };
+  pressConMatchup.textContent = `${teamA.name} vs ${teamB.name}`;
+  pressConResultView.hidden = true;
+  pressConQuestionView.hidden = false;
+  pressConSkipRow.hidden = false;
+  pressConOverlay.hidden = false;
+  renderPcQuestion();
+}
+
+function renderPcQuestion() {
+  const q = pcSession.questions[pcSession.index];
+  pressConProgress.textContent = `QUESTION ${pcSession.index + 1} / ${pcSession.questions.length}`;
+  pressConQuestionText.textContent = q.question;
+
+  const options = buildAnswerOptions();
+  pressConAnswers.innerHTML = options
+    .map((opt, i) => `<button data-pc-answer-index="${i}">${String.fromCharCode(65 + i)}. ${opt.text}</button>`)
+    .join("");
+  pressConAnswers.dataset.options = JSON.stringify(options);
+
+  pressConAnswers.querySelectorAll("[data-pc-answer-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const opts = JSON.parse(pressConAnswers.dataset.options);
+      const chosen = opts[Number(btn.dataset.pcAnswerIndex)];
+      applyPcAnswerEffect(chosen.type);
+      pcSession.index++;
+      if (pcSession.index < pcSession.questions.length) {
+        renderPcQuestion();
+      } else {
+        finishPressConference();
+      }
+    });
+  });
+}
+
+function applyPcAnswerEffect(personalityType) {
+  const effect = PC_EFFECTS[personalityType] || {};
+  Object.keys(effect).forEach((key) => {
+    pcSession.effects[key] = (pcSession.effects[key] || 0) + effect[key];
+  });
+}
+
+function finishPressConference() {
+  const { matchKey, teamA, effects } = pcSession;
+
+  // update team vibe stats (persist, tapi tetap dalam batas 0-100)
+  const stats = loadTeamStats(teamA.id);
+  stats.morale = clampStat(stats.morale + (effects.morale || 0));
+  stats.confidence = clampStat(stats.confidence + (effects.confidence || 0));
+  stats.mediaReputation = clampStat(stats.mediaReputation + (effects.mediaReputation || 0));
+  stats.fanHype = clampStat(stats.fanHype + (effects.fanHype || 0));
+  saveTeamStats(teamA.id, stats);
+
+  // efek kecil ke strength match ini doang — bukan permanen, dan
+  // di-clamp biar kecil banget (gak pernah bikin tim otomatis menang)
+  const rawModifier = (effects.confidence || 0) * 0.4 + (effects.morale || 0) * 0.3 - (effects.pressure || 0) * 0.3;
+  const strengthModifier = Math.max(-2, Math.min(2, Math.round(rawModifier)));
+
+  const result = { matchKey, teamId: teamA.id, completed: true, effects, strengthModifier, timestamp: Date.now() };
+  savePcResult(matchKey, result);
+
+  // kadang jadi berita (gak semua press conference)
+  if (Math.random() < 0.35) {
+    const league = leagues.find((l) => l.id === state.leagueId);
+    recordEventNews("pressConference", { team: teamA.name, league: league ? league.name : state.leagueId, season: state.season });
+    renderNewsTimeline();
+  }
+
+  pressConQuestionView.hidden = true;
+  pressConSkipRow.hidden = true;
+  pressConResultView.hidden = false;
+  pressConEffects.innerHTML = Object.entries(effects)
+    .filter(([, v]) => v !== 0)
+    .map(([key, v]) => `<span class="presscon-effect-chip ${v < 0 ? "presscon-effect-chip--neg" : ""}">${pcStatLabel(key)} ${v > 0 ? "+" : ""}${v}</span>`)
+    .join("") || `<span class="presscon-effect-chip">Jawaban netral, gak ada efek berarti.</span>`;
+}
+
+function pcStatLabel(key) {
+  return { morale: "Morale", confidence: "Confidence", mediaReputation: "Media Rep.", fanHype: "Fan Hype", pressure: "Pressure" }[key] || key;
+}
+
+document.getElementById("pressConStartMatchBtn").addEventListener("click", () => {
+  const cb = pcSession && pcSession.onStartMatch;
+  pressConOverlay.hidden = true;
+  pcSession = null;
+  if (cb) cb();
+});
+
+document.getElementById("pressConSkipBtn").addEventListener("click", () => {
+  if (!pcSession) return;
+  savePcResult(pcSession.matchKey, { matchKey: pcSession.matchKey, teamId: pcSession.teamA.id, completed: true, effects: {}, strengthModifier: 0, skipped: true, timestamp: Date.now() });
+  pressConOverlay.hidden = true;
+  pcSession = null;
+  renderSchedule();
+  renderKnockout();
+});
+
+document.getElementById("pressConClose").addEventListener("click", () => {
+  pressConOverlay.hidden = true;
+  pcSession = null;
+});
+pressConOverlay.addEventListener("click", (e) => {
+  if (e.target === pressConOverlay) {
+    pressConOverlay.hidden = true;
+    pcSession = null;
+  }
+});
+
+// HTML tombol kecil "🎙️ Press Conference" — cuma muncul kalau match
+// belum dimainkan DAN belum pernah press conference
+function pressConButtonHtml(matchKey) {
+  if (loadPcResult(matchKey)) return "";
+  return `<button class="schedule-item__play" data-open-presscon="${matchKey}" title="Pre-Match Press Conference">🎙️</button>`;
+}
 
 // ----------------------------------------------------------
 // INIT

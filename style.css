@@ -907,6 +907,84 @@ input:focus-visible {
   gap: 8px;
 }
 
+/* ============ PRE-MATCH PRESS CONFERENCE ============ */
+.presscon-modal {
+  max-width: 520px;
+}
+
+.presscon-matchup {
+  font-family: var(--font-display);
+  font-size: 15px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.presscon-progress {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  letter-spacing: 0.04em;
+}
+
+.presscon-question {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.presscon-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.presscon-answers button {
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.presscon-answers button:hover {
+  border-color: var(--gold);
+}
+
+.presscon-result-title {
+  text-align: center;
+  color: var(--gold);
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+
+.presscon-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.presscon-effect-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--cyan);
+}
+
+.presscon-effect-chip--neg {
+  color: var(--danger);
+}
+
 /* ============ CUSTOM TEAM FORM ============ */
 .custom-team-form {
   margin-top: 20px;
